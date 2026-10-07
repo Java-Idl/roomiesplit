@@ -1,0 +1,34 @@
+-- RoomieSplit Database Schema
+CREATE DATABASE IF NOT EXISTS roomiesplit CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE roomiesplit;
+
+CREATE TABLE IF NOT EXISTS users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(191) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS expenses (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    payer_id INT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    category VARCHAR(50) NOT NULL DEFAULT 'general',
+    amount DECIMAL(10, 2) NOT NULL,
+    receipt_filename VARCHAR(255) NULL,
+    expense_date DATE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (payer_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS settlements (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    payer_id INT NOT NULL,
+    receiver_id INT NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL,
+    settled_date DATE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (payer_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
