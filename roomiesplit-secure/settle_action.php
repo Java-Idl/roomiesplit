@@ -1,10 +1,24 @@
 <?php
+// VULNERABILITY MITIGATION: Clickjacking & CSRF
+// - Vulnerable lines (old): missing headers and CSRF validation
+// - Mitigation lines:
+//   - header("X-Frame-Options: DENY");
+//   - header("Content-Security-Policy: frame-ancestors 'none'");
+//   - CSRF generation and validation
 require_once 'includes/auth_check.php';
 require_once 'config/db.php';
 
-// Notice: X-Frame-Options and Content Security Policy headers omitted by specification
+header("X-Frame-Options: DENY");
+header("Content-Security-Policy: frame-ancestors 'none'");
+
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        die('CSRF token validation failed');
+    }
     $debtor_id = (int)($_POST['debtor_id'] ?? 0);
     $amount = (float)($_POST['amount'] ?? 0);
     $receiver_id = (int)($_POST['receiver_id'] ?? 0);
@@ -91,6 +105,7 @@ require_once 'includes/header.php';
 
                         <!-- One-Click Debt Settlement Form matching spec -->
                         <form action="settle_action.php" method="POST" class="settle-form-inline">
+                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
                             <input type="hidden" name="debtor_id" value="<?= (int)$debt['debtor_id'] ?>">
                             <input type="hidden" name="receiver_id" value="<?= (int)$debt['creditor_id'] ?>">
                             <input type="hidden" name="amount" value="<?= htmlspecialchars($debt['amount']) ?>">

@@ -1,4 +1,10 @@
 <?php
+// VULNERABILITY MITIGATION: DOM XSS
+// - Vulnerable lines (old): banner.innerHTML = "Active Category Filter: <strong>" + decodeURIComponent(hashValue) + "</strong>";
+// - Mitigation lines:
+//   - const category = decodeURIComponent(hashValue);
+//   - const validCategories = ['groceries', 'utilities', 'rent', 'food', 'entertainment', 'general'];
+//   - banner.textContent = "Active Category Filter: " + category;
 require_once 'includes/auth_check.php';
 require_once 'config/db.php';
 
@@ -267,6 +273,8 @@ require_once 'includes/header.php';
                             <span class="amount">$<?= number_format($d['amount'], 2) ?></span>
                             <!-- One-Click Settle button matching spec -->
                             <form action="settle_action.php" method="POST" style="margin:0;">
+                                <?php if (empty($_SESSION['csrf_token'])) { $_SESSION['csrf_token'] = bin2hex(random_bytes(32)); } ?>
+                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
                                 <input type="hidden" name="debtor_id" value="<?= (int)$d['debtor_id'] ?>">
                                 <input type="hidden" name="receiver_id" value="<?= (int)$d['creditor_id'] ?>">
                                 <input type="hidden" name="amount" value="<?= htmlspecialchars($d['amount']) ?>">
@@ -297,14 +305,21 @@ require_once 'includes/header.php';
     });
 
     if (hashValue) {
-      banner.innerHTML = "Active Category Filter: <strong>" + decodeURIComponent(hashValue) + "</strong>";
+      const category = decodeURIComponent(hashValue);
+      const validCategories = ['groceries', 'utilities', 'rent', 'food', 'entertainment', 'general'];
+      
+      if (validCategories.includes(category.toLowerCase())) {
+          banner.textContent = "Active Category Filter: " + category;
+      } else {
+          banner.textContent = "Active Category Filter: Unknown";
+      }
 
       // Filter rows matching category
       document.querySelectorAll('.expense-row').forEach(row => {
         row.style.display = row.dataset.category.toLowerCase() === hashValue.toLowerCase() ? '' : 'none';
       });
     } else {
-      banner.innerHTML = "";
+      banner.textContent = "";
       document.querySelectorAll('.expense-row').forEach(row => row.style.display = '');
     }
   }
