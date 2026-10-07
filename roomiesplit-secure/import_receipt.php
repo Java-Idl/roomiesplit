@@ -1,13 +1,54 @@
 <?php
+// VULNERABILITY MITIGATION: SSRF
+// - Vulnerable lines (old): $fileData = @file_get_contents($url);
+// - Mitigation lines: 
+//   - parse_url($url), check scheme http/https
+//   - gethostbyname($host)
+//   - filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)
+//   - curl with CURLOPT_TIMEOUT, CURLOPT_MAXREDIRS, CURLOPT_FOLLOWLOCATION=false
 require_once 'includes/auth_check.php';
 
 // POST Handler: Remote Receipt Downloader via URL
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $url = $_POST['receipt_url'] ?? '';
-    $filename = 'remote_' . time() . '.jpg';
-    $fileData = @file_get_contents($url);
+    
+    // MITIGATION: SSRF Defenses
+    $parsed_url = parse_url($url);
+    if (!isset($parsed_url['scheme']) || !in_array($parsed_url['scheme'], ['http', 'https'])) {
+        http_response_code(400);
+        header('Content-Type: application/json');
+        echo json_encode(['status' => 'error', 'message' => 'Invalid URL scheme.']);
+        exit;
+    }
+    
+    $host = $parsed_url['host'] ?? '';
+    $ip = gethostbyname($host);
+    if ($ip === $host && !filter_var($host, FILTER_VALIDATE_IP)) {
+        http_response_code(400);
+        header('Content-Type: application/json');
+        echo json_encode(['status' => 'error', 'message' => 'Unable to resolve host.']);
+        exit;
+    }
+    
+    if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) || $ip === '169.254.169.254') {
+        http_response_code(400);
+        header('Content-Type: application/json');
+        echo json_encode(['status' => 'error', 'message' => 'Invalid or restricted IP address.']);
+        exit;
+    }
 
-    if ($fileData !== false) {
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+    
+    $fileData = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    $filename = 'remote_' . time() . '.jpg';
+
+    if ($fileData !== false && $httpCode === 200) {
         file_put_contents('uploads/' . $filename, $fileData);
         // Return filename for expense attachment
         header('Content-Type: application/json');
